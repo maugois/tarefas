@@ -1,24 +1,14 @@
-'use client'
-
+import { GetServerSideProps } from "next";
 import { ChangeEvent, FormEvent, useState, useEffect } from "react";
+import styles from "./styles.module.css";
+import Head from "next/head";
+import { getSession } from "next-auth/react";
 import { Textarea } from "../../components/textarea";
 import { FiShare2 } from "react-icons/fi";
 import { FaTrash } from "react-icons/fa";
-import { getSession } from 'next-auth/react'
-import { redirect } from 'next/navigation'
 import { db } from "../../services/firebaseConnection";
-import {
-  addDoc,
-  collection,
-  query,
-  orderBy,
-  where,
-  onSnapshot,
-  doc,
-  deleteDoc,
-} from "firebase/firestore";
+import { addDoc, collection, query, orderBy, where, onSnapshot, doc, deleteDoc } from "firebase/firestore";
 import Link from "next/link";
-import styles from './styles.module.css'
 
 interface HomeProps {
   user: {
@@ -34,13 +24,7 @@ interface TaskProps {
   user: string;
 }
 
-export default function DashboardClient({ user }: HomeProps) {
-//   const session = await getSession()
-
-//   if (!session?.user) {
-//     redirect('/')
-//   }
-
+export default function Dashboard({ user }: HomeProps) {
   const [input, setInput] = useState("");
   const [publicTask, setPublicTask] = useState(false);
   const [tasks, setTasks] = useState<TaskProps[]>([]);
@@ -57,13 +41,13 @@ export default function DashboardClient({ user }: HomeProps) {
       onSnapshot(q, (snapshot) => {
         let lista = [] as TaskProps[];
 
-        snapshot.forEach((docSnap) => {
+        snapshot.forEach((doc) => {
           lista.push({
-            id: docSnap.id,
-            tarefa: docSnap.data().tarefa,
-            created: docSnap.data().created,
-            user: docSnap.data().user,
-            public: docSnap.data().public,
+            id: doc.id,
+            tarefa: doc.data().tarefa,
+            created: doc.data().created,
+            user: doc.data().user,
+            public: doc.data().public,
           });
         });
 
@@ -71,9 +55,7 @@ export default function DashboardClient({ user }: HomeProps) {
       });
     }
 
-    if (user?.email) {
-      loadTarefas();
-    }
+    loadTarefas();
   }, [user?.email]);
 
   function handleChangePublic(event: ChangeEvent<HTMLInputElement>) {
@@ -100,18 +82,25 @@ export default function DashboardClient({ user }: HomeProps) {
     }
   }
 
+  async function handleShare(id: string) {
+    await navigator.clipboard.writeText(
+      `${process.env.NEXT_PUBLIC_URL}/task/${id}`
+    );
+
+    alert("URL Copiada com sucesso!");
+  }
+
   async function handleDeleteTask(id: string) {
     const docRef = doc(db, "tarefas", id);
     await deleteDoc(docRef);
   }
 
-  async function handleShare(id: string) {
-    await navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_URL}/task/${id}`);
-    alert("URL Copiada com sucesso!");
-  }
-
   return (
     <div className={styles.container}>
+      <Head>
+        <title>Meu painel de tarefas</title>
+      </Head>
+
       <main className={styles.main}>
         <section className={styles.content}>
           <div className={styles.contentForm}>
@@ -125,7 +114,6 @@ export default function DashboardClient({ user }: HomeProps) {
                   setInput(event.target.value)
                 }
               />
-
               <div className={styles.checkboxArea}>
                 <input
                   type="checkbox"
@@ -183,3 +171,24 @@ export default function DashboardClient({ user }: HomeProps) {
     </div>
   );
 }
+
+export const getServerSideProps: GetServerSideProps = async ({ req }) => {
+  const session = await getSession({ req });
+  
+  if (!session?.user) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
+
+  return {
+    props: {
+      user: {
+        email: session?.user?.email,
+      },
+    },
+  };
+};
